@@ -1,0 +1,40 @@
+# Virtual Environments
+venv/
+env/
+.venv/
+env_old/
+
+# Datasets (Excluded as requested)
+dataset/
+coconut_dataset/
+training_data/
+
+# Node dependencies
+node_modules/
+frontend/node_modules/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# IDEs and OS junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+__MACOSX/
+
+# Build and Dist
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+training_log.txt
+
+# Model backups (Optional, but usually kept if small. Keeping the main ones.)
+# mobilenet_best_backup.pth
+# mobilenet_old.pth
