@@ -43,6 +43,12 @@ export default function Navbar() {
           >
             {t(lang, 'nav_project')}
           </NavLink>
+          <NavLink
+            to="/iot"
+            className={({ isActive }) => `navLink ${isActive ? 'navLinkActive' : ''}`}
+          >
+            IoT Dashboard
+          </NavLink>
           <select
             value={lang}
             onChange={(e) => setLang(e.target.value)}

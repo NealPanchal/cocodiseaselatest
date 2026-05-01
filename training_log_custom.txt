@@ -1,0 +1,28 @@
+Training started | device=mps | epochs=25 | batch=32 | lr=0.0001 | classes=11
+Classes: ['Bud Root Dropping', 'Bud Rot', 'CCI_Leaflets', 'Caterpillars', 'Gray Leaf Spot', 'Healthy_Leaves', 'Leaf Rot', 'Stem Bleeding', 'WCLWD_DryingofLeaflets', 'WCLWD_Flaccidity', 'WCLWD_Yellowing']
+
+Epoch 01/25 | Loss: 0.5175 | Train Acc: 0.857 | Val Acc: 0.988 | Time: 86.7s
+  [SAVED] Best model saved (val_acc=0.988)
+Epoch 02/25 | Loss: 0.0919 | Train Acc: 0.974 | Val Acc: 0.994 | Time: 79.4s
+  [SAVED] Best model saved (val_acc=0.994)
+Epoch 03/25 | Loss: 0.0619 | Train Acc: 0.982 | Val Acc: 0.993 | Time: 84.4s
+Epoch 04/25 | Loss: 0.0470 | Train Acc: 0.982 | Val Acc: 0.992 | Time: 116.5s
+Epoch 05/25 | Loss: 0.0395 | Train Acc: 0.986 | Val Acc: 0.995 | Time: 141.0s
+  [SAVED] Best model saved (val_acc=0.995)
+Epoch 06/25 | Loss: 0.0334 | Train Acc: 0.987 | Val Acc: 0.995 | Time: 134.3s
+Epoch 07/25 | Loss: 0.0327 | Train Acc: 0.988 | Val Acc: 0.995 | Time: 114.5s
+Epoch 08/25 | Loss: 0.0313 | Train Acc: 0.989 | Val Acc: 0.993 | Time: 107.6s
+Epoch 09/25 | Loss: 0.0257 | Train Acc: 0.991 | Val Acc: 0.997 | Time: 118.7s
+  [SAVED] Best model saved (val_acc=0.997)
+Epoch 10/25 | Loss: 0.0299 | Train Acc: 0.989 | Val Acc: 0.993 | Time: 107.1s
+Epoch 11/25 | Loss: 0.0182 | Train Acc: 0.993 | Val Acc: 0.995 | Time: 105.3s
+Epoch 12/25 | Loss: 0.0249 | Train Acc: 0.991 | Val Acc: 0.997 | Time: 117.7s
+Epoch 13/25 | Loss: 0.0212 | Train Acc: 0.991 | Val Acc: 0.996 | Time: 107.2s
+Epoch 14/25 | Loss: 0.0221 | Train Acc: 0.990 | Val Acc: 0.994 | Time: 107.2s
+
+[EARLY STOP] No improvement for 5 epochs.
+
+Training complete | Best Val Acc: 0.9971
+Classes (11): ['Bud Root Dropping', 'Bud Rot', 'CCI_Leaflets', 'Caterpillars', 'Gray Leaf Spot', 'Healthy_Leaves', 'Leaf Rot', 'Stem Bleeding', 'WCLWD_DryingofLeaflets', 'WCLWD_Flaccidity', 'WCLWD_Yellowing']
+Class map: /Users/neal/Desktop/LATEST COO/class_map.json
+Model saved to: /Users/neal/Desktop/LATEST COO/mobilenet_new.pth

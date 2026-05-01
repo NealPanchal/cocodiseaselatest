@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, RefreshCw, Camera, AlertTriangle, ShieldCheck, Search, Loader2 } from 'lucide-react'
+import { X, RefreshCw, Camera, AlertTriangle, ShieldCheck, Search, Loader2, Leaf, Ban } from 'lucide-react'
 import { t } from '../i18n.js'
 import { useLanguage } from '../context/LanguageContext.jsx'
 
@@ -25,6 +25,7 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
   // New states for stability and quality
   const [predictionBuffer, setPredictionBuffer] = useState([]) // Stores { disease, confidence, report }
   const [stabilityLock, setStabilityLock] = useState(null) // { disease, expiresAt, report, confidence }
+  const [notALeaf, setNotALeaf] = useState(false) // True when non-plant detected
   const [qualityStatus, setQualityStatus] = useState('ok') // 'ok' | 'blurry' | 'dark'
 
   // Start camera on mount
@@ -214,6 +215,19 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
           if (res.ok) {
             const data = await res.json()
             
+            // Handle not-a-leaf rejection from backend
+            if (data.not_a_leaf) {
+              setNotALeaf(true)
+              // Clear prediction state when non-leaf detected
+              setPredictionBuffer([])
+              setStabilityLock(null)
+              resolve(null)
+              return
+            }
+            
+            // Valid leaf detected — clear not-a-leaf warning
+            setNotALeaf(false)
+            
             setPredictionBuffer(prev => {
               const newBuffer = [...prev, { disease: data.disease, confidence: data.confidence, report: data.report }].slice(-BUFFER_SIZE);
               
@@ -324,7 +338,7 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
           )}
 
           {/* Quality Indicator */}
-          {qualityStatus !== 'ok' && (
+          {qualityStatus !== 'ok' && !notALeaf && (
             <div style={{
               position: 'absolute',
               top: '100px',
@@ -347,8 +361,41 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
             </div>
           )}
 
+          {/* Not-a-Leaf Warning */}
+          {notALeaf && (
+            <div style={{
+              position: 'absolute',
+              top: '80px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(185, 28, 28, 0.95))',
+              color: 'white',
+              padding: '14px 22px',
+              borderRadius: '16px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '8px',
+              zIndex: 50,
+              boxShadow: '0 8px 24px rgba(239, 68, 68, 0.4)',
+              maxWidth: '300px',
+              textAlign: 'center',
+              animation: 'notLeafPulse 2s ease-in-out infinite'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Ban size={22} />
+                <span style={{ fontSize: '16px', fontWeight: 800 }}>NOT A PLANT LEAF</span>
+              </div>
+              <span style={{ fontSize: '12px', opacity: 0.9, fontWeight: 500 }}>
+                Point camera at a coconut leaf for disease detection
+              </span>
+            </div>
+          )}
+
           {/* Stability Status */}
-          {isStable && (
+          {isStable && !notALeaf && (
             <div style={{
               position: 'absolute',
               top: '100px',
@@ -371,7 +418,7 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
             </div>
           )}
 
-          {isAnalyzing && !isStable && (
+          {isAnalyzing && !isStable && !notALeaf && (
             <div style={{
               position: 'absolute',
               top: '100px',
@@ -394,7 +441,7 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
           )}
 
           {/* Prediction Result Overlay */}
-          {mode === 'live' && displayPrediction && (
+          {mode === 'live' && displayPrediction && !notALeaf && (
             <div style={{
               position: 'absolute',
               bottom: '130px',
@@ -463,11 +510,11 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
 
           <button
             onClick={mode === 'live' ? () => {
-              if (displayPrediction && lastBlob) {
+              if (displayPrediction && lastBlob && !notALeaf) {
                 onCapture(displayPrediction, lastBlob)
               }
             } : handleManualCapture}
-            disabled={mode === 'live' ? !displayPrediction : isCapturing}
+            disabled={mode === 'live' ? (!displayPrediction || notALeaf) : isCapturing}
             style={{
               width: '84px',
               height: '84px',
@@ -510,6 +557,10 @@ export default function LiveCamera({ onClose, onCapture, mode = 'live' }) {
         }
         .animate-spin {
           animation: spin 1s linear infinite;
+        }
+        @keyframes notLeafPulse {
+          0%, 100% { box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4); }
+          50% { box-shadow: 0 8px 32px rgba(239, 68, 68, 0.7); }
         }
       `}</style>
     </div>

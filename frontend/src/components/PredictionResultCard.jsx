@@ -184,6 +184,64 @@ export default function PredictionResultCard({ result, imageUrl }) {
 
   const { lang } = useLanguage()
 
+  // Handle not-a-leaf rejection
+  if (result.not_a_leaf) {
+    return (
+      <section className="card" style={{ padding: 18 }} aria-label="Not a leaf warning">
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          padding: '24px 16px'
+        }}>
+          <div style={{
+            width: 72,
+            height: 72,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #fef2f2, #fee2e2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 16,
+            border: '3px solid #fca5a5'
+          }}>
+            <AlertTriangle size={36} color="#dc2626" />
+          </div>
+
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#991b1b', marginBottom: 8 }}>
+            Not a Plant Leaf
+          </div>
+
+          <div style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.6, maxWidth: 360, marginBottom: 20 }}>
+            The uploaded image does not appear to be a coconut leaf or plant.
+            Please upload a clear image of a coconut leaf for accurate disease detection.
+          </div>
+
+          <div style={{
+            background: '#f8fafc',
+            borderRadius: 12,
+            padding: '16px 20px',
+            width: '100%',
+            maxWidth: 400,
+            textAlign: 'left',
+            border: '1px solid #e2e8f0'
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10, color: '#334155' }}>
+              📸 Tips for best results:
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.9, fontSize: 13, color: '#64748b' }}>
+              <li>Ensure the coconut leaf fills most of the frame</li>
+              <li>Use good, natural lighting — avoid harsh shadows</li>
+              <li>Hold the camera steady and close to the leaf</li>
+              <li>Include both healthy and affected areas if visible</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   const info = getDiseaseInfo(result.disease, lang, null)
   let report = info || result.report
   if (result.report?.fertilizers && (!report?.fertilizers || report.fertilizers.length === 0)) {

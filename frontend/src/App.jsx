@@ -5,6 +5,7 @@ import HomePage from './pages/HomePage.jsx'
 import PredictPage from './pages/PredictPage.jsx'
 import HowItHelpsPage from './pages/HowItHelpsPage.jsx'
 import ProjectInfoPage from './pages/ProjectInfoPage.jsx'
+import IoTDashboard from './pages/IoTDashboard.jsx'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/predict" element={<PredictPage />} />
           <Route path="/help" element={<HowItHelpsPage />} />
           <Route path="/project" element={<ProjectInfoPage />} />
+          <Route path="/iot" element={<IoTDashboard />} />
         </Routes>
       </main>
       <Footer />

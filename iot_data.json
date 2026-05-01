@@ -1,0 +1,44 @@
+{
+  "TREE-0001": {
+    "uid": "RFID-TEST001",
+    "disease": "WCLWD_DryingofLeaflets",
+    "confidence": 0.365062415599823,
+    "location": {
+      "lat": 10.0261,
+      "lng": 76.3125
+    },
+    "last_scan": "2026-04-24T13:44:16.000168+00:00",
+    "report": {
+      "status": "Diseased",
+      "cause": [
+        "Drying symptom consistent with WCLWD category in dataset.",
+        "Can be intensified by drought, salt stress, or disease-related decline."
+      ],
+      "symptoms": [
+        "Leaflet tips/edges dry out and turn brown.",
+        "Brittle texture and progressive drying from tip to base."
+      ],
+      "remedies": [
+        "Improve irrigation scheduling; avoid moisture stress.",
+        "Apply potash-rich fertilization if recommended by local guidelines.",
+        "Remove severely dried fronds and maintain sanitation."
+      ],
+      "prevention": [
+        "Mulching and organic matter addition to conserve moisture.",
+        "Avoid saline irrigation water and ensure good drainage.",
+        "Monitor early drying symptoms and act before progression."
+      ],
+      "fertilizers": [
+        "Sulphate of Potash (SOP) @ 1.5-2 kg per palm (preferred over MOP in saline conditions).",
+        "Apply NPK 8:8:16 @ 2 kg per palm with double potassium ratio for drought tolerance.",
+        "Gypsum @ 500 g per palm if soil salinity is an issue (helps leach excess salts).",
+        "Foliar spray of potassium nitrate @ 1% (10 g/liter) for quick recovery.",
+        "Organic mulch (coconut husk, straw) @ 50-75 kg around the palm basin to reduce evaporation."
+      ]
+    },
+    "smoothed": false,
+    "vote_count": null,
+    "low_confidence": true,
+    "scan_count": 1
+  }
+}

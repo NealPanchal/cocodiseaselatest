@@ -1,13 +1,19 @@
 import io
+import json
+import math
 import os
 import sys
 from functools import lru_cache
 
+import numpy as np
 import torch
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image
+from PIL import Image, ImageFilter, ImageStat
 from torchvision import models, transforms
+
+from .disease_reports import REPORTS_EN
+from .disease_reports_i18n import REPORTS_I18N
 
 app = FastAPI(title="Coconut Leaf Disease Detection")
 
@@ -38,505 +44,35 @@ def _resolve_device() -> torch.device:
 device = _resolve_device()
 print(f"[inference] device = {device}")
 
-# ===== CLASSES (6 — MUST MATCH TRAINING) =====
-class_names = [
-    "Caterpillars",
-    "CCI_Leaflets",
-    "Healthy_Leaves",
-    "WCLWD_DryingofLeaflets",
-    "WCLWD_Flaccidity",
-    "WCLWD_Yellowing"
+# ===== CLASS MAP (dynamic — loaded from class_map.json) =====
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_repo_root = os.path.abspath(os.path.join(_script_dir, "..", ".."))
+_class_map_path = os.path.join(_repo_root, "class_map.json")
+
+# Fallback class names if class_map.json not yet generated
+_FALLBACK_CLASSES = [
+    "Bud Root Dropping", "Bud Rot", "CCI_Leaflets", "Caterpillars",
+    "Gray Leaf Spot", "Healthy_Leaves", "Leaf Rot", "Stem Bleeding",
+    "WCLWD_DryingofLeaflets", "WCLWD_Flaccidity", "WCLWD_Yellowing"
 ]
 
-REPORTS_EN = {
-    "Healthy_Leaves": {
-        "status": "Healthy",
-        "cause": [
-            "No visible disease symptoms detected in the provided leaf image.",
-            "Minor natural color variation can occur due to age, lighting, or variety.",
-        ],
-        "symptoms": [
-            "Uniform green color and normal leaflet texture.",
-            "No distinct yellowing, drying, flaccidity, or pest feeding marks.",
-        ],
-        "remedies": [
-            "Maintain regular irrigation schedule and avoid waterlogging.",
-            "Apply balanced nutrition (NPK + micronutrients) based on soil test.",
-            "Continue routine field scouting once per week.",
-        ],
-        "prevention": [
-            "Keep the crown clean and remove old/dry fronds periodically.",
-            "Use clean planting material and follow recommended spacing.",
-            "Monitor for early pest activity (caterpillars/mites) and act early.",
-        ],
-        "fertilizers": [
-            "Apply NPK 14:14:14 @ 1.5 kg per palm twice a year (June-July and November-December).",
-            "Supplement with organic manure (FYM/compost) @ 25-50 kg per palm annually.",
-            "Micronutrient spray: Mix Borax (0.2%), Zinc sulfate (0.5%), Magnesium sulfate (1%) - spray every 3-4 months.",
-            "For coastal areas, consider salt-tolerant varieties and additional potassium (25-50% more).",
-        ],
-    },
-    "Caterpillars": {
-        "status": "Diseased",
-        "cause": [
-            "Caterpillar infestation feeding on leaf tissue.",
-            "Higher risk during warm/humid periods and in dense canopies.",
-        ],
-        "symptoms": [
-            "Irregular holes or chewed edges on leaflets.",
-            "Skeletonization (leaf tissue eaten leaving veins).",
-            "Presence of larvae, frass (droppings), or webbing.",
-        ],
-        "remedies": [
-            "Physically remove and destroy visible larvae (small infestations).",
-            "Encourage biological control (natural predators/parasitoids).",
-            "If severe, use an approved biopesticide (e.g., Bt-based) or recommended insecticide as per local agriculture guidelines.",
-        ],
-        "prevention": [
-            "Regular monitoring, especially on young palms and new flush leaves.",
-            "Avoid excessive nitrogen which can attract pests.",
-            "Maintain field sanitation and reduce alternate host plants.",
-        ],
-        "fertilizers": [
-            "Use Bacillus thuringiensis (Bt) spray @ 1-2 g/liter water, apply every 7-10 days until infestation clears.",
-            "Apply Neem oil solution @ 3-5 ml/liter water as organic pest control and foliar spray.",
-            "Reduce nitrogen fertilizer temporarily; use balanced NPK 10:10:20 instead of high-N formulas.",
-            "Support plant recovery with potassium-rich fertilizer (Muriate of Potash @ 0.5 kg/palm) after pest control.",
-        ],
-    },
-    "CCI_Leaflets": {
-        "status": "Diseased",
-        "cause": [
-            "Leaflet injury/stress category captured in the dataset (commonly associated with nutrient stress, minor infections, or environmental stress).",
-            "Could be influenced by moisture stress, micronutrient deficiency, or early-stage infection patterns.",
-        ],
-        "symptoms": [
-            "Patchy discoloration on leaflets.",
-            "Mild spots or uneven chlorosis without clear WCLWD pattern.",
-            "Localized damage that may not uniformly spread across the leaf.",
-        ],
-        "remedies": [
-            "Improve field nutrition: apply balanced NPK and consider magnesium/boron if deficiency is suspected.",
-            "Remove heavily damaged leaflets to reduce secondary infection sources.",
-            "If spotting increases, consult local experts for targeted fungicide/insecticide recommendation.",
-        ],
-        "prevention": [
-            "Maintain irrigation consistency and avoid drought stress.",
-            "Conduct periodic soil and leaf nutrient analysis.",
-            "Use clean tools and avoid mechanical damage during farm operations.",
-        ],
-        "fertilizers": [
-            "Apply Magnesium sulfate (Epsom salt) @ 200-300 g per palm as soil application or foliar spray (2%).",
-            "Borax @ 50-100 g per palm mixed with sand for even soil distribution (apply once a year).",
-            "Zinc sulfate @ 0.5% foliar spray (400-500 g in 100 liters water for 100 palms).",
-            "Balanced NPK 15:15:15 @ 1.5 kg per palm to correct overall nutrient balance.",
-            "Organic option: Apply neem cake @ 5 kg per palm to improve soil health and micronutrient availability.",
-        ],
-    },
-    "WCLWD_Yellowing": {
-        "status": "Diseased",
-        "cause": [
-            "Yellowing symptom consistent with WCLWD category in dataset.",
-            "May be associated with nutrient imbalance, root stress, or disease progression.",
-        ],
-        "symptoms": [
-            "Yellowing of leaflets (chlorosis), often starting at tips or margins.",
-            "Reduced vigor and pale appearance compared to healthy leaves.",
-        ],
-        "remedies": [
-            "Check irrigation and drainage; correct water stress.",
-            "Apply recommended fertilizer schedule; include micronutrients if needed.",
-            "If widespread and progressive, seek expert diagnosis to confirm WCLWD and follow regional management protocol.",
-        ],
-        "prevention": [
-            "Maintain balanced fertilization and organic matter in soil.",
-            "Avoid prolonged flooding or drought.",
-            "Early identification and removal of severely affected fronds can reduce stress load on the palm.",
-        ],
-        "fertilizers": [
-            "Iron sulfate (Ferrous sulfate) @ 50-100 g per palm as soil application to correct chlorosis.",
-            "Chelated iron spray @ 0.5% concentration as foliar application for quick greening effect.",
-            "Apply NPK 12:12:17 @ 2 kg per palm with emphasis on potassium for stress tolerance.",
-            "Magnesium sulfate @ 250 g per palm if Mg deficiency suspected (common in sandy soils).",
-            "Organic compost @ 30-40 kg per palm to improve soil structure and nutrient retention.",
-        ],
-    },
-    "WCLWD_Flaccidity": {
-        "status": "Diseased",
-        "cause": [
-            "Flaccidity symptom consistent with WCLWD category in dataset.",
-            "Often linked to water stress, vascular/physiological disruption, or advanced disease stress.",
-        ],
-        "symptoms": [
-            "Leaflets appear limp, drooping, and lose firmness.",
-            "Overall reduction in leaf turgor.",
-        ],
-        "remedies": [
-            "Ensure adequate irrigation and correct any root-zone issues (compaction, poor drainage).",
-            "Apply balanced nutrition to support recovery.",
-            "If symptoms persist or spread, consult local agriculture department for WCLWD confirmation and management guidance.",
-        ],
-        "prevention": [
-            "Maintain proper soil moisture and mulching to stabilize root-zone temperature.",
-            "Avoid damaging roots during inter-cultivation.",
-            "Regular scouting for early warning signs.",
-        ],
-        "fertilizers": [
-            "Potassium-rich fertilizer: Muriate of Potash (MOP) @ 1-1.5 kg per palm to improve water regulation.",
-            "Apply NPK 10:10:25 @ 2 kg per palm emphasizing potassium (K) for turgor maintenance.",
-            "Calcium nitrate @ 200-300 g per palm to strengthen cell walls and improve water uptake.",
-            "Root drench with seaweed extract or humic acid @ 50-100 ml per palm to stimulate root recovery.",
-            "Adequate mulching with coconut husk/coir pith to conserve soil moisture.",
-        ],
-    },
-    "WCLWD_DryingofLeaflets": {
-        "status": "Diseased",
-        "cause": [
-            "Drying symptom consistent with WCLWD category in dataset.",
-            "Can be intensified by drought, salt stress, or disease-related decline.",
-        ],
-        "symptoms": [
-            "Leaflet tips/edges dry out and turn brown.",
-            "Brittle texture and progressive drying from tip to base.",
-        ],
-        "remedies": [
-            "Improve irrigation scheduling; avoid moisture stress.",
-            "Apply potash-rich fertilization if recommended by local guidelines.",
-            "Remove severely dried fronds and maintain sanitation.",
-        ],
-        "prevention": [
-            "Mulching and organic matter addition to conserve moisture.",
-            "Avoid saline irrigation water and ensure good drainage.",
-            "Monitor early drying symptoms and act before progression.",
-        ],
-        "fertilizers": [
-            "Sulphate of Potash (SOP) @ 1.5-2 kg per palm (preferred over MOP in saline conditions).",
-            "Apply NPK 8:8:16 @ 2 kg per palm with double potassium ratio for drought tolerance.",
-            "Gypsum @ 500 g per palm if soil salinity is an issue (helps leach excess salts).",
-            "Foliar spray of potassium nitrate @ 1% (10 g/liter) for quick recovery.",
-            "Organic mulch (coconut husk, straw) @ 50-75 kg around the palm basin to reduce evaporation.",
-        ],
-    },
-}
+
+def _load_class_names() -> list:
+    """Load class names from class_map.json, fall back to hardcoded list."""
+    if os.path.exists(_class_map_path):
+        with open(_class_map_path, "r", encoding="utf-8") as f:
+            cmap = json.load(f)
+        # Sort by integer key to get ordered list
+        return [cmap[str(i)] for i in range(len(cmap))]
+    print(f"[inference] WARNING: {_class_map_path} not found, using fallback classes")
+    return list(_FALLBACK_CLASSES)
 
 
-REPORTS_I18N = {
-    "en": REPORTS_EN,
-    "hi": {
-        "Healthy_Leaves": {
-            "status": "स्वस्थ",
-            "cause": [
-                "दी गई पत्ती की तस्वीर में स्पष्ट रोग लक्षण नहीं दिखे।",
-                "पत्ती की उम्र/रोशनी/प्रजाति के कारण हल्का रंग-परिवर्तन स्वाभाविक हो सकता है।",
-            ],
-            "symptoms": [
-                "समान हरा रंग और सामान्य बनावट।",
-                "पीला पड़ना/सूखना/ढीलापन/कीट-खुरचन जैसे स्पष्ट संकेत नहीं।",
-            ],
-            "remedies": [
-                "नियमित सिंचाई रखें और जलभराव से बचें।",
-                "मिट्टी परीक्षण के अनुसार संतुलित खाद (NPK + सूक्ष्म पोषक) दें।",
-                "साप्ताहिक निरीक्षण जारी रखें।",
-            ],
-            "prevention": [
-                "पुरानी/सूखी पत्तियाँ समय-समय पर हटाएँ।",
-                "स्वच्छ रोपण सामग्री और उचित दूरी अपनाएँ।",
-                "कीट गतिविधि की शुरुआती निगरानी करें और समय पर नियंत्रण करें।",
-            ],
-            "fertilizers": [
-                "NPK 14:14:14 @ 1.5 किग्रा प्रति पेड़ वर्ष में दो बार (जून-जुलाई और नवंबर-दिसंबर) लगाएं।",
-                "गोबर की खाद/कम्पोस्ट @ 25-50 किग्रा प्रति पेड़ सालाना मिलाएं।",
-                "सूक्ष्म पोषक स्प्रे: बोरेक्स (0.2%), जिंक सल्फेट (0.5%), मैग्नीशियम सल्फेट (1%) मिश्रण - हर 3-4 महीने स्प्रे करें।",
-                "तटीय क्षेत्रों के लिए अतिरिक्त पोटैशियम (25-50% अधिक) दें।",
-            ],
-        },
-        "Caterpillars": {
-            "status": "रोग/कीट प्रभावित",
-            "cause": [
-                "सूंडी/इल्ली द्वारा पत्ती के ऊतक को खाना।",
-                "गरम-नम मौसम और घनी छाया में जोखिम बढ़ता है।",
-            ],
-            "symptoms": [
-                "पत्तियों में अनियमित छेद या कटी किनारियाँ।",
-                "स्केलेटनाइज़ेशन (नसें बचकर ऊतक खा जाना)।",
-                "इल्ली, मल (frass) या जाला दिखाई देना।",
-            ],
-            "remedies": [
-                "कम संक्रमण में दिखाई देने वाली इल्ली को हटाकर नष्ट करें।",
-                "जैविक नियंत्रण (प्राकृतिक शत्रु/परजीवी) को बढ़ावा दें।",
-                "अधिक संक्रमण में स्थानीय कृषि सलाह अनुसार Bt-आधारित जैव-कीटनाशी या अनुशंसित कीटनाशी का उपयोग करें।",
-            ],
-            "prevention": [
-                "नियमित निगरानी, खासकर नई/कोमल पत्तियों पर।",
-                "अधिक नाइट्रोजन से बचें (कीट आकर्षित हो सकते हैं)।",
-                "खेत की सफाई रखें और वैकल्पिक पोषक पौधों को कम करें।",
-            ],
-            "fertilizers": [
-                "Bacillus thuringiensis (Bt) स्प्रे @ 1-2 ग्राम/लीटर पानी, संक्रमण खत्म होने तक हर 7-10 दिन लगाएं।",
-                "नीम तेल घोल @ 3-5 मिली/लीटर पानी कीट नियंत्रण और पत्ते स्प्रे के लिए।",
-                "नाइट्रोजन खाद अस्थायी रूप से कम करें; NPK 10:10:20 का उपयोग करें।",
-                "कीट नियंत्रण के बाद पोटैशियम युक्त खाद (म्यूरेट ऑफ पोटाश @ 0.5 किग्रा/पेड़) दें।",
-            ],
-        },
-        "CCI_Leaflets": {
-            "status": "प्रभावित",
-            "cause": [
-                "डेटासेट में यह श्रेणी अक्सर तनाव/हल्के संक्रमण/पोषक असंतुलन से जुड़ी होती है।",
-                "नमी तनाव, सूक्ष्म पोषक कमी या शुरुआती संक्रमण पैटर्न का प्रभाव हो सकता है।",
-            ],
-            "symptoms": [
-                "पत्ती के भागों में धब्बेदार रंग-परिवर्तन।",
-                "हल्के धब्बे या असमान पीलापन।",
-                "क्षति स्थानीय हो सकती है और पूरे पत्ते में समान नहीं फैलती।",
-            ],
-            "remedies": [
-                "संतुलित पोषण दें; संदेह होने पर मैग्नीशियम/बोरॉन पर ध्यान दें।",
-                "बहुत क्षतिग्रस्त भाग हटाएँ ताकि द्वितीयक संक्रमण कम हो।",
-                "लक्षण बढ़ें तो लक्षित उपचार के लिए विशेषज्ञ से सलाह लें।",
-            ],
-            "prevention": [
-                "सिंचाई नियमित रखें और सूखे तनाव से बचें।",
-                "समय-समय पर मिट्टी/पत्ती पोषक परीक्षण करें।",
-                "कृषि कार्यों के दौरान यांत्रिक चोट से बचें।",
-            ],
-            "fertilizers": [
-                "मैग्नीशियम सल्फेट @ 200-300 ग्राम प्रति पेड़ मिट्टी में या 2% पत्ते स्प्रे।",
-                "बोरेक्स @ 50-100 ग्राम प्रति पेड़ रेत के साथ मिलाकर (साल में एक बार)।",
-                "जिंक सल्फेट @ 0.5% पत्ते स्प्रे (100 पेड़ों के लिए 100 लीटर पानी में 400-500 ग्राम)।",
-                "संतुलित NPK 15:15:15 @ 1.5 किग्रा प्रति पेड़।",
-                "नीम की खली @ 5 किग्रा प्रति पेड़ मिट्टी की सेहत सुधारने के लिए।",
-            ],
-        },
-        "WCLWD_Yellowing": {
-            "status": "रोग प्रभावित",
-            "cause": [
-                "डेटासेट की WCLWD श्रेणी के अनुरूप पीलापन।",
-                "पोषक असंतुलन, जड़ तनाव या रोग प्रगति से जुड़ा हो सकता है।",
-            ],
-            "symptoms": [
-                "पत्तियों का पीला पड़ना (क्लोरोसिस), अक्सर किनारों/सिरे से।",
-                "पौधे की ताकत कम और रंग फीका।",
-            ],
-            "remedies": [
-                "सिंचाई/निकास जाँचें; जल तनाव सुधारें।",
-                "अनुशंसित खाद कार्यक्रम अपनाएँ; जरूरत पर सूक्ष्म पोषक दें।",
-                "यदि तेजी से बढ़े तो पुष्टि के लिए स्थानीय विशेषज्ञ से सलाह लें।",
-            ],
-            "prevention": [
-                "संतुलित पोषण और जैविक पदार्थ बनाए रखें।",
-                "लंबे समय तक जलभराव या सूखा न होने दें।",
-                "बहुत प्रभावित पत्तियाँ हटाकर पौधे का तनाव कम करें।",
-            ],
-            "fertilizers": [
-                "आयरन सल्फेट @ 50-100 ग्राम प्रति पेड़ पीलापन ठीक करने के लिए।",
-                "चेलेटेड आयरन स्प्रे @ 0.5% पत्ते पर छिड़काव जल्दी हरियाली के लिए।",
-                "NPK 12:12:17 @ 2 किग्रा प्रति पेड़ पोटैशियम जोर के साथ।",
-                "मैग्नीशियम सल्फेट @ 250 ग्राम प्रति पेड़ यदि Mg की कमी हो।",
-                "जैविक खाद @ 30-40 किग्रा प्रति पेड़।",
-            ],
-        },
-        "WCLWD_Flaccidity": {
-            "status": "रोग प्रभावित",
-            "cause": [
-                "डेटासेट की WCLWD श्रेणी के अनुरूप पत्तियों का ढीलापन।",
-                "जल तनाव या शारीरिक/वस्कुलर बाधा से जुड़ा हो सकता है।",
-            ],
-            "symptoms": [
-                "पत्तियाँ ढीली/लटकती हुई दिखती हैं।",
-                "turgor (कड़कपन) कम हो जाता है।",
-            ],
-            "remedies": [
-                "पर्याप्त सिंचाई सुनिश्चित करें; जड़ क्षेत्र की समस्या सुधारें।",
-                "संतुलित पोषण दें।",
-                "लक्षण बने रहें तो विशेषज्ञ से पुष्टि/सलाह लें।",
-            ],
-            "prevention": [
-                "मिट्टी की नमी स्थिर रखें; मल्चिंग करें।",
-                "जड़ों को नुकसान से बचाएँ।",
-                "नियमित निरीक्षण करें।",
-            ],
-            "fertilizers": [
-                "म्यूरेट ऑफ पोटाश (MOP) @ 1-1.5 किग्रा प्रति पेड़ जल नियंत्रण के लिए।",
-                "NPK 10:10:25 @ 2 किग्रा प्रति पेड़ पोटैशियम पर जोर।",
-                "कैल्शियम नाइट्रेट @ 200-300 ग्राम प्रति पेड़।",
-                "समुद्री शैवाल/ह्यूमिक अम्ल @ 50-100 ml प्रति पेड़ जड़ ड्रेंच।",
-                "नारियल की भूसी से मल्चिंग।",
-            ],
-        },
-        "WCLWD_DryingofLeaflets": {
-            "status": "रोग प्रभावित",
-            "cause": [
-                "डेटासेट की WCLWD श्रेणी के अनुरूप पत्तियों का सूखना।",
-                "सूखा, लवणता या रोग तनाव से बढ़ सकता है।",
-            ],
-            "symptoms": [
-                "पत्ती के किनारे/सिरे भूरे होकर सूखना।",
-                "भंगुर बनावट और धीरे-धीरे सूखना।",
-            ],
-            "remedies": [
-                "सिंचाई सुधारें और नमी तनाव से बचें।",
-                "स्थानीय सिफारिश अनुसार पोटाश युक्त खाद पर विचार करें।",
-                "बहुत सूखी पत्तियाँ हटाकर सफाई रखें।",
-            ],
-            "prevention": [
-                "मल्चिंग/जैविक पदार्थ से नमी संरक्षण।",
-                "खारे पानी से बचें और अच्छी निकासी।",
-                "शुरुआती लक्षणों पर जल्दी कार्रवाई करें।",
-            ],
-            "fertilizers": [
-                "सल्फेट ऑफ पोटाश (SOP) @ 1.5-2 किग्रा प्रति पेड़ (नमकीन मिट्टी में MOP से बेहतर)।",
-                "NPK 8:8:16 @ 2 किग्रा प्रति पेड़ दोगुनी पोटैशियम के साथ।",
-                "जिप्सम @ 500 ग्राम प्रति पेड़ यदि नमक तनाव हो।",
-                "पोटैशियम नाइट्रेट @ 1% स्प्रे (10 ग्राम/लीटर) जल्दी रिकवरी के लिए।",
-                "जैविक मल्च (नारियल भूसी, पुआल) @ 50-75 किग्रा।",
-            ],
-        },
-    },
-    "ta": {
-        "Healthy_Leaves": {
-            "status": "ஆரோக்கியம்",
-            "cause": [
-                "கொடுக்கப்பட்ட படத்தில் நோய் அறிகுறிகள் தெளிவாக தெரியவில்லை.",
-                "இலை வயது/ஒளி/வகை காரணமாக லேசான நிற மாற்றம் இயல்பானது.",
-            ],
-            "symptoms": [
-                "ஒரே மாதிரியான பச்சை நிறம் மற்றும் இயல்பான இலை அமைப்பு.",
-                "மஞ்சளாகுதல்/உலர்வு/தளர்வு/கீடுகள் கடித்த தடயங்கள் இல்லை.",
-            ],
-            "remedies": [
-                "முறையான பாசனம்; நீர் தேக்கம் தவிர்க்கவும்.",
-                "மண் பரிசோதனைப்படி சமநிலை உரம் (NPK + சிறு சத்துக்கள்).",
-                "வாராந்திர கண்காணிப்பு தொடரவும்.",
-            ],
-            "prevention": [
-                "பழைய/உலர்ந்த இலைகளை நீக்கவும்.",
-                "சுத்தமான நாற்று மற்றும் பரிந்துரைக்கப்பட்ட இடைவெளி.",
-                "கீடுகள் ஆரம்ப நிலையிலேயே கண்டறிந்து கட்டுப்படுத்தவும்.",
-            ],
-        },
-        "Caterpillars": {
-            "status": "பாதிப்பு",
-            "cause": [
-                "இலை திசுக்களை இலைப்புழுக்கள் (caterpillars) தின்னுதல்.",
-                "வெப்பம்/ஈரப்பதம் மற்றும் அடர்ந்த இலைகள் உள்ள இடங்களில் அதிக வாய்ப்பு.",
-            ],
-            "symptoms": [
-                "இலைகளில் ஒழுங்கற்ற துளைகள் அல்லது கடித்த விளிம்புகள்.",
-                "இலை திசு கரைய, நரம்புகள் மட்டும் மிச்சமாகுதல்.",
-                "இலைப்புழு/மலம்/வலைப்பின்னல் காணப்படுதல்.",
-            ],
-            "remedies": [
-                "குறைந்த தாக்கத்தில் புழுக்களை கையால் அகற்றி அழிக்கவும்.",
-                "இயற்கை எதிரிகள்/பராசிட்கள் மூலம் உயிரியல் கட்டுப்பாட்டை ஊக்குவிக்கவும்.",
-                "அதிகமாக இருந்தால் உள்ளூர் வழிகாட்டுதல்படி Bt அடிப்படையிலான உயிர்க்கீடொல்லி அல்லது பரிந்துரைக்கப்பட்ட மருந்து பயன்படுத்தவும்.",
-            ],
-            "prevention": [
-                "புதிய இலைகளில் அடிக்கடி கண்காணிப்பு.",
-                "அதிக நைட்ரஜன் உரம் தவிர்க்கவும்.",
-                "தோட்ட சுத்தம் மற்றும் மாற்று புரவலன் செடிகளை குறைக்கவும்.",
-            ],
-        },
-        "CCI_Leaflets": {
-            "status": "பாதிப்பு",
-            "cause": [
-                "இந்த வகை பெரும்பாலும் சத்து குறைவு/சூழல் அழுத்தம்/தொடக்க நிலை பாதிப்புகளுடன் தொடர்புடையதாக இருக்கும்.",
-                "நீர்ப்பாசன அழுத்தம் அல்லது சிறுசத்துக் குறைவு காரணமாக இருக்கலாம்.",
-            ],
-            "symptoms": [
-                "இலைத் துண்டுகளில் தழும்பான நிறமாற்றம்.",
-                "மிதமான புள்ளிகள் அல்லது ஒற்றுமையற்ற மஞ்சள்மை.",
-                "உள்ளூர் சேதம், முழு இலையிலும் சமமாக இல்லாமை.",
-            ],
-            "remedies": [
-                "சமநிலை உரமிடல்; தேவையெனில் மெக்னீசியம்/போரான் போன்ற சிறுசத்துக்கள்.",
-                "கடுமையாக பாதிக்கப்பட்ட பகுதிகளை அகற்றவும்.",
-                "அறிகுறிகள் அதிகரித்தால் நிபுணர் ஆலோசனை பெறவும்.",
-            ],
-            "prevention": [
-                "ஒழுங்கான பாசனம்; வறட்சியை தவிர்க்கவும்.",
-                "மண்/இலை சத்து பரிசோதனை செய்யவும்.",
-                "விவசாய பணிகளில் இயந்திர சேதம் தவிர்க்கவும்.",
-            ],
-        },
-        "WCLWD_Yellowing": {
-            "status": "பாதிப்பு",
-            "cause": [
-                "WCLWD வகையை ஒத்த மஞ்சள்மையைக் காட்டுகிறது.",
-                "சத்து சமநிலை இல்லாமை அல்லது வேரழுத்தம் காரணமாக இருக்கலாம்.",
-            ],
-            "symptoms": [
-                "இலைத் துண்டுகள் மஞ்சளாகுதல்.",
-                "செடியின் வளர்ச்சி குறைவு, வெளிர் தோற்றம்.",
-            ],
-            "remedies": [
-                "நீர் நிலை/வடிகால் சரிபார்த்து சரி செய்யவும்.",
-                "பரிந்துரைக்கப்பட்ட உர அட்டவணையை பின்பற்றவும்.",
-                "தொடர்ந்தால் நிபுணர் மூலம் உறுதி செய்து நடவடிக்கை எடுக்கவும்.",
-            ],
-            "prevention": [
-                "சமநிலை உரமிடல் மற்றும் கரிமப் பொருள்.",
-                "நீர் தேக்கம்/வறட்சி தவிர்க்கவும்.",
-                "கடுமையாக பாதித்த இலைகளை அகற்றி அழுத்தத்தை குறைக்கவும்.",
-            ],
-        },
-        "WCLWD_Flaccidity": {
-            "status": "பாதிப்பு",
-            "cause": [
-                "WCLWD வகையை ஒத்த தளர்வுத் தன்மை.",
-                "நீரழுத்தம் அல்லது உடலியல் பாதிப்பு காரணமாக இருக்கலாம்.",
-            ],
-            "symptoms": [
-                "இலைத் துண்டுகள் தளர்ந்து தொங்குதல்.",
-                "திடத்தன்மை குறைவு.",
-            ],
-            "remedies": [
-                "பாசனம் சரி செய்யவும்; வேர்பகுதி பிரச்சினைகள் சரி செய்யவும்.",
-                "சமநிலை ஊட்டச்சத்து வழங்கவும்.",
-                "தொடர்ந்தால் உள்ளூர் நிபுணர் ஆலோசனை பெறவும்.",
-            ],
-            "prevention": [
-                "முல்ச்சிங் மூலம் மண் ஈரப்பதம் நிலைநிறுத்தவும்.",
-                "வேர்களுக்கு சேதம் தவிர்க்கவும்.",
-                "அடிக்கடி கண்காணிப்பு.",
-            ],
-        },
-        "WCLWD_DryingofLeaflets": {
-            "status": "பாதிப்பு",
-            "cause": [
-                "WCLWD வகையை ஒத்த உலர்வு.",
-                "வறட்சி/உப்பு அழுத்தம் அல்லது பாதிப்பு காரணமாக அதிகரிக்கலாம்.",
-            ],
-            "symptoms": [
-                "இலை ஓரங்கள்/முனைகள் பழுப்பு நிறமாகி உலர்தல்.",
-                "முறிவான அமைப்பு மற்றும் படிப்படி உலர்வு.",
-            ],
-            "remedies": [
-                "பாசன அட்டவணையை மேம்படுத்தவும்.",
-                "உள்ளூர் பரிந்துரைப்படி பொட்டாஷ் அதிகமான உரம்.",
-                "கடுமையாக உலர்ந்த இலைகளை அகற்றி சுத்தம்.",
-            ],
-            "prevention": [
-                "முல்ச்சிங்/கரிமப் பொருள் மூலம் ஈரப்பதம் பாதுகாப்பு.",
-                "உப்பு நீர் தவிர்க்கவும், நல்ல வடிகால்.",
-                "ஆரம்ப அறிகுறிகளிலேயே நடவடிக்கை.",
-            ],
-        },
-    },
-    "te": REPORTS_EN,
-    "kn": REPORTS_EN,
-    "ml": REPORTS_EN,
-}
-
-
-# Maps new-dataset class names → report keys (keeps backward compat)
-_CLASS_ALIAS: dict[str, str] = {
-    "CCI_Caterpillars": "Caterpillars",
-}
+class_names = _load_class_names()
+print(f"[inference] classes ({len(class_names)}): {class_names}")
 
 
 def get_report(disease: str, lang: str) -> dict:
-    # Resolve alias (e.g. CCI_Caterpillars → Caterpillars)
-    disease = _CLASS_ALIAS.get(disease, disease)
     key = (lang or "en").strip().lower()
     templates = REPORTS_I18N.get(key) or REPORTS_I18N.get("en")
     report = templates.get(disease) if isinstance(templates, dict) else None
@@ -549,19 +85,20 @@ def get_report(disease: str, lang: str) -> dict:
             "symptoms": [],
             "remedies": [],
             "prevention": [],
+            "fertilizers": [],
         }
     return report
 
+
 @lru_cache(maxsize=1)
 def _get_model_and_classes():
+    num_classes = len(class_names)
     model = models.mobilenet_v3_large(weights=None)
     model.classifier[3] = torch.nn.Linear(
         model.classifier[3].in_features,
-        6,
+        num_classes,
     )
 
-    _script_dir = os.path.dirname(os.path.abspath(__file__))
-    _repo_root = os.path.abspath(os.path.join(_script_dir, "..", ".."))
     model_path = os.path.join(_repo_root, "mobilenet_best.pth")
 
     if not os.path.exists(model_path):
@@ -591,7 +128,141 @@ tfm = transforms.Compose([
     )
 ])
 
+# ===== CONFIDENCE THRESHOLD =====
+_CONFIDENCE_THRESHOLD = 0.60
+
+# ===== PLANT / LEAF VALIDATION GATE =====
+# Rejects non-plant images (humans, objects, etc.) before disease classification.
+# Uses HSV green-channel analysis, edge density, and color distribution.
+
+_LEAF_GREEN_RATIO_MIN = 0.08      # At least 8% of pixels should be in the green/vegetation HSV range
+_LEAF_EDGE_DENSITY_MIN = 0.02     # Leaves have fine vein-like edges
+_LEAF_EDGE_DENSITY_MAX = 0.55     # But not noisy random patterns
+_LEAF_SATURATION_MIN = 25.0       # Leaves are generally not gray/desaturated
+_SKIN_RATIO_MAX = 0.35            # Reject if >35% of pixels are skin-toned
+
+
+def _is_likely_leaf(img: Image.Image) -> tuple:
+    """Return (is_leaf: bool, reason: str) using color + texture heuristics."""
+    rgb = img.convert("RGB").resize((224, 224))
+    arr = np.array(rgb, dtype=np.float32)
+
+    # --- 1. HSV green-vegetation ratio ---
+    # Convert RGB [0-255] to HSV manually for speed (avoid OpenCV dependency)
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    max_c = np.maximum(np.maximum(r, g), b)
+    min_c = np.minimum(np.minimum(r, g), b)
+    delta = max_c - min_c + 1e-7
+
+    # Hue calculation (0-360 scale)
+    hue = np.zeros_like(max_c)
+    mask_r = (max_c == r)
+    mask_g = (max_c == g)
+    mask_b = (max_c == b)
+    hue[mask_r] = 60.0 * (((g[mask_r] - b[mask_r]) / delta[mask_r]) % 6)
+    hue[mask_g] = 60.0 * (((b[mask_g] - r[mask_g]) / delta[mask_g]) + 2)
+    hue[mask_b] = 60.0 * (((r[mask_b] - g[mask_b]) / delta[mask_b]) + 4)
+
+    saturation = np.where(max_c > 0, (delta / max_c) * 100, 0)
+    value = (max_c / 255.0) * 100
+
+    # Green/vegetation hue range: 35-160 degrees, with reasonable saturation and brightness
+    green_mask = (
+        (hue >= 35) & (hue <= 160) &
+        (saturation >= 15) &
+        (value >= 10)
+    )
+    green_ratio = np.sum(green_mask) / green_mask.size
+
+    # Brown/dry leaf hue range: 15-45 degrees (brown/olive tones common in diseased leaves)
+    brown_mask = (
+        (hue >= 10) & (hue <= 50) &
+        (saturation >= 10) &
+        (value >= 10) & (value <= 80)
+    )
+    brown_ratio = np.sum(brown_mask) / brown_mask.size
+
+    # Combined vegetation ratio (green + brown/dry leaf tones)
+    vegetation_ratio = green_ratio + brown_ratio * 0.6
+
+    # --- 2. Skin-tone detection (to reject human faces/hands) ---
+    # Skin in HSV: hue 0-50, sat 15-70%, val 30-100%
+    skin_mask = (
+        ((hue >= 0) & (hue <= 50)) &
+        (saturation >= 15) & (saturation <= 70) &
+        (value >= 30)
+    )
+    # Additional RGB skin check: R > 95, G > 40, B > 20, R > G, R > B
+    rgb_skin = (r > 95) & (g > 40) & (b > 20) & (r > g) & (r > b)
+    combined_skin = skin_mask & rgb_skin
+    skin_ratio = np.sum(combined_skin) / combined_skin.size
+
+    # --- 3. Edge density (leaf vein patterns) ---
+    gray = rgb.convert("L")
+    edges = gray.filter(ImageFilter.Kernel(
+        (3, 3), [-1, -1, -1, -1, 8, -1, -1, -1, -1], scale=1, offset=128
+    ))
+    edge_arr = np.array(edges, dtype=np.float32)
+    edge_pixels = np.sum(np.abs(edge_arr - 128) > 25)
+    edge_density = edge_pixels / edge_arr.size
+
+    # --- 4. Average saturation check (leaves are colorful, not gray) ---
+    avg_saturation = np.mean(saturation)
+
+    # --- Decision logic ---
+    # Reject if significant skin tone detected
+    if skin_ratio > _SKIN_RATIO_MAX:
+        # Only allow if there's also strong green vegetation (e.g., hand holding a leaf)
+        if green_ratio < 0.20:
+            return False, "skin_detected"
+
+    # Accept if good vegetation ratio (must not be dominantly skin)
+    if vegetation_ratio >= _LEAF_GREEN_RATIO_MIN:
+        # But reject if it's mostly skin with overlapping brown tones
+        if skin_ratio > 0.50 and green_ratio < 0.10:
+            return False, "skin_detected"
+        return True, "ok"
+
+    # Accept if edge density is in leaf-like range AND some color AND not skin
+    if (edge_density >= _LEAF_EDGE_DENSITY_MIN and
+        edge_density <= _LEAF_EDGE_DENSITY_MAX and
+        avg_saturation >= _LEAF_SATURATION_MIN and
+        skin_ratio < _SKIN_RATIO_MAX):
+        return True, "ok"
+
+    # Default reject
+    return False, "no_vegetation"
+
+
 def predict_pil_image(img: Image.Image, lang: str = "en") -> dict:
+    # --- Leaf validation gate ---
+    is_leaf, reject_reason = _is_likely_leaf(img)
+    if not is_leaf:
+        return {
+            "disease": "not_a_leaf",
+            "confidence": 0.0,
+            "low_confidence": True,
+            "not_a_leaf": True,
+            "reject_reason": reject_reason,
+            "report": {
+                "status": "Not a Plant Leaf",
+                "cause": [
+                    "The image does not appear to be a coconut leaf or plant.",
+                    "Please point the camera at a coconut leaf for accurate disease detection.",
+                ],
+                "symptoms": [],
+                "remedies": [
+                    "Ensure the leaf fills most of the frame.",
+                    "Use good lighting and avoid shadows.",
+                    "Hold the camera steady and close to the leaf.",
+                ],
+                "prevention": [],
+                "fertilizers": [],
+            },
+            "lang": (lang or "en").strip().lower(),
+        }
+
+    # --- Disease classification ---
     model, classes = _get_model_and_classes()
     x = tfm(img.convert("RGB")).unsqueeze(0).to(device)
 
@@ -600,13 +271,16 @@ def predict_pil_image(img: Image.Image, lang: str = "en") -> dict:
         prob = torch.softmax(out, 1)
         conf, pred = torch.max(prob, 1)
 
-    raw_disease = classes[pred.item()]
-    # Normalise alias for display (CCI_Caterpillars → Caterpillars)
-    display_disease = _CLASS_ALIAS.get(raw_disease, raw_disease)
+    disease = classes[pred.item()]
+    confidence = float(conf.item())
+    low_confidence = confidence < _CONFIDENCE_THRESHOLD
+
     return {
-        "disease": display_disease,
-        "confidence": float(conf.item()),
-        "report": get_report(raw_disease, lang),
+        "disease": disease,
+        "confidence": confidence,
+        "low_confidence": low_confidence,
+        "not_a_leaf": False,
+        "report": get_report(disease, lang),
         "lang": (lang or "en").strip().lower(),
     }
 
@@ -616,6 +290,7 @@ def health():
     return {
         "status": "ok",
         "device": str(device),
+        "classes": len(class_names),
     }
 
 
@@ -638,3 +313,5 @@ if __name__ == "__main__":
     result = predict_pil_image(img)
     print("Disease:", result["disease"])
     print("Confidence:", round(result["confidence"] * 100, 2), "%")
+    if result["low_confidence"]:
+        print("⚠️  Low confidence — please retake image")

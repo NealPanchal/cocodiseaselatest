@@ -656,6 +656,61 @@ export const DISEASE_INFO = {
       remedy: ['آبپاشی/نکاسی چیک کریں۔', 'کھاد کا شیڈول اپنائیں۔', 'بڑھے تو ماہر سے مشورہ۔'],
       prevention: ['متوازن کھاد۔', 'لمبی پانی بھراؤ/خشکی سے بچیں۔', 'زیادہ متاثرہ پتے ہٹائیں۔']
     }
+  },
+
+  'Bud Root Dropping': {
+    en: {
+      label: 'Bud Root Dropping', status: 'Diseased',
+      symptoms: ['Premature dropping of immature nuts.', 'Darkening and rotting of root system near bud.', 'Yellowing of lower fronds.'],
+      cause: ['Caused by Phytophthora palmivora fungus.', 'Excess moisture and poor drainage favor spread.'],
+      remedy: ['Remove and destroy affected palms.', 'Apply Metalaxyl-based fungicide as soil drench.', 'Improve drainage.'],
+      prevention: ['Ensure proper drainage.', 'Avoid root injuries.', 'Apply Bordeaux mixture (1%) during monsoon.'],
+      fertilizers: ['NPK 12:12:17 @ 2 kg/palm.', 'Neem cake @ 5 kg/palm.', 'Trichoderma compost @ 10-15 kg/palm.']
+    }
+  },
+
+  'Bud Rot': {
+    en: {
+      label: 'Bud Rot', status: 'Diseased',
+      symptoms: ['Spindle leaf yellowing and wilting.', 'Rotting with foul smell in crown region.', 'Palm death if untreated.'],
+      cause: ['Phytophthora palmivora attacking the growing bud.', 'Heavy rainfall and high humidity.'],
+      remedy: ['Remove rotten tissue and clean crown.', 'Apply Bordeaux paste (10%).', 'Pour Metalaxyl-Mancozeb (0.1%) into crown.'],
+      prevention: ['Good air circulation via proper spacing.', 'Crown inspection during rainy season.', 'Prophylactic Bordeaux mixture before monsoon.'],
+      fertilizers: ['MOP @ 1.5 kg/palm.', 'NPK 14:14:14 @ 2 kg/palm.', 'Neem cake @ 5 kg/palm.']
+    }
+  },
+
+  'Gray Leaf Spot': {
+    en: {
+      label: 'Gray Leaf Spot', status: 'Diseased',
+      symptoms: ['Small gray-brown spots on leaflets.', 'Darker border with gray center.', 'Premature leaf drying in severe cases.'],
+      cause: ['Caused by Pestalotiopsis palmarum.', 'High humidity and poor nutrition favor it.'],
+      remedy: ['Remove and burn infected leaves.', 'Spray Mancozeb (0.25%) or Carbendazim (0.1%).', 'Improve air circulation.'],
+      prevention: ['Adequate spacing.', 'Avoid overhead irrigation.', 'Balanced nutrition.'],
+      fertilizers: ['NPK 15:15:15 @ 2 kg/palm.', 'Potassium sulfate @ 500 g/palm.', 'Neem oil spray @ 3 ml/liter.']
+    }
+  },
+
+  'Leaf Rot': {
+    en: {
+      label: 'Leaf Rot', status: 'Diseased',
+      symptoms: ['Brown lesions on leaflets from tips.', 'Rotting and disintegration of tissue.', 'Entire fronds brown and hanging in severe cases.'],
+      cause: ['Fungal complex including Colletotrichum.', 'Mite damage provides entry for fungi.'],
+      remedy: ['Remove affected fronds.', 'Spray Hexaconazole (0.05%) or Mancozeb (0.25%).', 'Control mites first if present.'],
+      prevention: ['Control eriophyid mites promptly.', 'Good field sanitation.', 'Balanced nutrition.'],
+      fertilizers: ['NPK 12:12:17 @ 2 kg/palm.', 'Magnesium sulfate @ 300 g/palm.', 'Borax @ 100 g/palm.']
+    }
+  },
+
+  'Stem Bleeding': {
+    en: {
+      label: 'Stem Bleeding', status: 'Diseased',
+      symptoms: ['Dark brown-black exudation on stem.', 'Longitudinal cracks oozing reddish-brown fluid.', 'Reduced yield and gradual decline.'],
+      cause: ['Caused by Thielaviopsis paradoxa fungus.', 'Entry through wounds on the stem.'],
+      remedy: ['Chisel out affected tissue to healthy wood.', 'Apply coal tar or Bordeaux paste (10%).', 'Root feed with Tridemorph (5ml/100ml water).'],
+      prevention: ['Avoid stem injuries during harvesting.', 'Apply Bordeaux paste on wounds immediately.', 'Good drainage around palm base.'],
+      fertilizers: ['NPK 14:14:14 @ 2 kg/palm.', 'MOP @ 1.5 kg/palm.', 'Neem cake @ 5 kg/palm.']
+    }
   }
 }
 

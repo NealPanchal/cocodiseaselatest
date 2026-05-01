@@ -5,6 +5,7 @@ export const LANGUAGES = [
   { code: 'kn', label: 'ಕನ್ನಡ (Kannada)' },
   { code: 'te', label: 'తెలుగు (Telugu)' },
   { code: 'ml', label: 'മലയാളം (Malayalam)' },
+  { code: 'ta', label: 'தமிழ் (Tamil)' },
   { code: 'bn', label: 'বাংলা (Bengali)' },
   { code: 'gu', label: 'ગુજરાતી (Gujarati)' },
   { code: 'pa', label: 'ਪੰਜਾਬੀ (Punjabi)' },
@@ -637,7 +638,7 @@ const STRINGS = {
   }
 }
 
-  ;['hi', 'mr', 'kn', 'te', 'ml', 'bn', 'gu', 'pa', 'or', 'ur'].forEach((code) => {
+  ;['hi', 'mr', 'kn', 'te', 'ml', 'ta', 'bn', 'gu', 'pa', 'or', 'ur'].forEach((code) => {
     if (!STRINGS[code]) STRINGS[code] = STRINGS.en
   })
 

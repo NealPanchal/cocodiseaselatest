@@ -8,7 +8,11 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/predict': 'http://127.0.0.1:8000',
-      '/health': 'http://127.0.0.1:8000'
+      '/health': 'http://127.0.0.1:8000',
+      '/iot': {
+        target: 'http://127.0.0.1:8000',
+        ws: true
+      }
     }
   }
 })
