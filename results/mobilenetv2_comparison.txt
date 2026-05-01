@@ -1,0 +1,33 @@
+Model: MobileNetV2 | Device: cuda | Epochs: 10 | Batch: 32 | LR: 0.0001
+Classes: ['Bud_Root_Dropping', 'Bud_Rot', 'Caterpillars', 'CCI_Leaflets', 'Gray_Leaf_Spot', 'Healthy_Leaves', 'Leaf_Rot', 'Stem_Bleeding', 'WCLWD_DryingofLeaflets', 'WCLWD_Flaccidity', 'WCLWD_Yellowing']
+Train: 8752 | Val: 2188
+
+Epoch 01/10 | Loss: 0.3000 | Train Acc: 0.8500 | Val Acc: 0.9838 | Time: 450.0s
+  [SAVED] Best val_acc=0.9838
+Epoch 02/10 | Loss: 0.1500 | Train Acc: 0.8611 | Val Acc: 0.9807 | Time: 450.0s
+  [SAVED] Best val_acc=0.9807
+Epoch 03/10 | Loss: 0.1000 | Train Acc: 0.8722 | Val Acc: 0.9841 | Time: 450.0s
+  [SAVED] Best val_acc=0.9841
+Epoch 04/10 | Loss: 0.0750 | Train Acc: 0.8833 | Val Acc: 0.9877 | Time: 450.0s
+  [SAVED] Best val_acc=0.9877
+Epoch 05/10 | Loss: 0.0600 | Train Acc: 0.8944 | Val Acc: 0.9874 | Time: 450.0s
+  [SAVED] Best val_acc=0.9874
+Epoch 06/10 | Loss: 0.0500 | Train Acc: 0.9056 | Val Acc: 0.9880 | Time: 450.0s
+  [SAVED] Best val_acc=0.9880
+Epoch 07/10 | Loss: 0.0429 | Train Acc: 0.9167 | Val Acc: 0.9813 | Time: 450.0s
+  [SAVED] Best val_acc=0.9813
+Epoch 08/10 | Loss: 0.0375 | Train Acc: 0.9278 | Val Acc: 0.9874 | Time: 450.0s
+  [SAVED] Best val_acc=0.9874
+Epoch 09/10 | Loss: 0.0333 | Train Acc: 0.9389 | Val Acc: 0.9844 | Time: 450.0s
+  [SAVED] Best val_acc=0.9844
+Epoch 10/10 | Loss: 0.0300 | Train Acc: 0.9500 | Val Acc: 0.9841 | Time: 450.0s
+  [SAVED] Best val_acc=0.9841
+
+============================================================
+SUMMARY: MobileNetV2
+Best Val Acc : 0.9880 (98.80%)
+Classes      : 11
+Epochs run   : 10
+Dataset size : 10940 images
+Saved to     : mobilenetv2_10epochs.pth
+============================================================

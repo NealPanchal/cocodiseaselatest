@@ -94,15 +94,28 @@ def get_report(disease: str, lang: str) -> dict:
 def _get_model_and_classes():
     num_classes = len(class_names)
     model = models.mobilenet_v3_large(weights=None)
+    # Match training architecture: Dropout(0.4) + Linear → 11 classes
+    model.classifier[2] = torch.nn.Dropout(p=0.4)
     model.classifier[3] = torch.nn.Linear(
         model.classifier[3].in_features,
         num_classes,
     )
 
-    model_path = os.path.join(_repo_root, "mobilenet_best.pth")
-
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model weights not found at: {model_path}")
+    # Try mobilenet_new.pth first (retrained), fallback to mobilenet_best.pth
+    _candidate_paths = [
+        os.path.join(_repo_root, "mobilenet_new.pth"),
+        os.path.join(_repo_root, "mobilenet_best.pth"),
+    ]
+    model_path = None
+    for p in _candidate_paths:
+        if os.path.exists(p):
+            model_path = p
+            break
+    if model_path is None:
+        raise FileNotFoundError(
+            f"Model weights not found. Looked for: {_candidate_paths}"
+        )
+    print(f"[inference] loading model from: {model_path}")
 
     ckpt = torch.load(model_path, map_location=device)
     classes = list(class_names)
@@ -210,20 +223,17 @@ def _is_likely_leaf(img: Image.Image) -> tuple:
     avg_saturation = np.mean(saturation)
 
     # --- Decision logic ---
-    # Reject if significant skin tone detected
+    # 1. Accept first if good vegetation ratio (green + brown/dry leaf tones)
+    #    This must come BEFORE skin check because dry/brown leaves overlap skin HSV.
+    if vegetation_ratio >= _LEAF_GREEN_RATIO_MIN:
+        return True, "ok"
+
+    # 2. Reject if significant skin tone and no real vegetation
     if skin_ratio > _SKIN_RATIO_MAX:
-        # Only allow if there's also strong green vegetation (e.g., hand holding a leaf)
         if green_ratio < 0.20:
             return False, "skin_detected"
 
-    # Accept if good vegetation ratio (must not be dominantly skin)
-    if vegetation_ratio >= _LEAF_GREEN_RATIO_MIN:
-        # But reject if it's mostly skin with overlapping brown tones
-        if skin_ratio > 0.50 and green_ratio < 0.10:
-            return False, "skin_detected"
-        return True, "ok"
-
-    # Accept if edge density is in leaf-like range AND some color AND not skin
+    # 3. Accept if edge density is in leaf-like range AND some color AND not skin
     if (edge_density >= _LEAF_EDGE_DENSITY_MIN and
         edge_density <= _LEAF_EDGE_DENSITY_MAX and
         avg_saturation >= _LEAF_SATURATION_MIN and

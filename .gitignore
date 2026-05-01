@@ -38,3 +38,4 @@ training_log.txt
 # Model backups (Optional, but usually kept if small. Keeping the main ones.)
 # mobilenet_best_backup.pth
 # mobilenet_old.pth
+results/*.pth

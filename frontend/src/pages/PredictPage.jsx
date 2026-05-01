@@ -18,8 +18,12 @@ export default function PredictPage() {
       <LiveCamera
         mode={cameraMode}
         onClose={() => setShowLiveCamera(false)}
-        onCapture={(prediction) => {
+        onCapture={(prediction, blob) => {
           setResult(prediction)
+          if (blob) {
+            const url = URL.createObjectURL(blob)
+            setImageUrl(url)
+          }
           setShowLiveCamera(false)
         }}
       />
